@@ -1,5 +1,7 @@
 # Orbital Studio
 
+[Open the live website](https://carterbh.github.io/orbital-studio/)
+
 An interactive orbital explorer for all 118 elements, built with plain HTML, CSS, and JavaScript. No build step, dependencies, database, or API keys are required.
 
 The site can be hosted on GitHub Pages by choosing **Deploy from a branch**, branch **main**, folder **/ (root)** under **Settings → Pages**. GitHub Pages serves the static site; `serve.cjs` is only for local previews.

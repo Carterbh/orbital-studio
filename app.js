@@ -187,6 +187,7 @@ function drawBoxes() {
   $('occupancy-title').textContent=`${element.name} · ${element.z} electrons`;
   $('occupancy-config').textContent=`${element.predicted?'Reference prediction':'Ground-state filling'}: ${M.configText(element)}.`;
   $('all-orbitals').setAttribute('aria-pressed',state.atom&&state.enabledSublevels.size===element.config.length&&state.enabledOrbitals.size===M.atomOrbitals(element).length);
+  $('all-sublevels-off').setAttribute('aria-pressed',state.atom&&state.enabledSublevels.size===0);
   $('boxes').replaceChildren();
   for(const s of [...element.config].sort(aufbauCompare)) {
     const group=document.createElement('div');group.className='boxgroup';
@@ -313,6 +314,10 @@ $('element-search').oninput=updateSearch;
 $('element-search').onkeydown=event=>{if(event.key==='Enter'){const first=updateSearch();if(first)pickElement(first);}};
 $('mode').onchange=()=>{state.atom=$('mode').value==='atom';syncMode();generate();};
 $('all-orbitals').onclick=()=>setFocus('all');
+$('all-sublevels-off').onclick=()=>{
+  state.enabledSublevels.clear();
+  state.atom=true;state.sublevel='custom';state.orbital='all';syncMode();generate(true);
+};
 $('n').onchange=()=>choose(+$('n').value,Math.min(state.l,+$('n').value-1),0);
 $('l').onchange=()=>choose(state.n,+$('l').value,0);
 $('m').onchange=()=>choose(state.n,state.l,+$('m').value);

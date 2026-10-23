@@ -24,10 +24,11 @@ for(const e of M.elements){
     assert.ok(M.sample(o).slice(0,3).every(Number.isFinite));
   }
 }
-const expected={24:'[Ar] 3d⁵ 4s¹',29:'[Ar] 3d¹⁰ 4s¹',46:'[Kr] 4d¹⁰',58:'[Xe] 4f¹ 5d¹ 6s²',
-  78:'[Xe] 4f¹⁴ 5d⁹ 6s¹',92:'[Rn] 5f³ 6d¹ 7s²',103:'[Rn] 5f¹⁴ 7s² 7p¹',
-  110:'[Rn] 5f¹⁴ 6d⁹ 7s¹',111:'[Rn] 5f¹⁴ 6d¹⁰ 7s¹',118:'[Rn] 5f¹⁴ 6d¹⁰ 7s² 7p⁶'};
+const expected={24:'[Ar] 4s¹ 3d⁵',29:'[Ar] 4s¹ 3d¹⁰',30:'[Ar] 4s² 3d¹⁰',46:'[Kr] 4d¹⁰',58:'[Xe] 6s² 4f¹ 5d¹',
+  78:'[Xe] 6s¹ 4f¹⁴ 5d⁹',92:'[Rn] 7s² 5f³ 6d¹',103:'[Rn] 7s² 5f¹⁴ 7p¹',
+  110:'[Rn] 7s¹ 5f¹⁴ 6d⁹',111:'[Rn] 7s¹ 5f¹⁴ 6d¹⁰',118:'[Rn] 7s² 5f¹⁴ 6d¹⁰ 7p⁶'};
 for(const [z,text] of Object.entries(expected))assert.equal(M.configText(M.elements[z-1]),text);
+assert.equal(M.configText(M.elements[29],false),'1s² 2s² 2p⁶ 3s² 3p⁶ 4s² 3d¹⁰');
 for(const [z,weight] of [[1,'1.0080'],[26,'55.845'],[40,'91.222'],[43,'[97]'],[61,'[145]'],[92,'238.03'],[118,'[294]']])
   assert.equal(M.elements[z-1].weight,weight);
 assert.deepEqual(M.atomOrbitals(M.elements[5]).filter(o=>o.key==='2p').map(o=>o.occupancy),[1,1,0]);

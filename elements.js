@@ -64,7 +64,9 @@ const OrbitalModel = (() => {
     const core = short ? [86,54,36,18,10,2].find(z => z < element.z) : null;
     const coreKeys = new Set(core ? elements[core-1].config.map(s => s.key) : []);
     return (core ? `[${elements[core-1].symbol}] ` : '') + element.config
-      .filter(s => !coreKeys.has(s.key)).map(s => s.key+superscript(s.electrons)).join(' ');
+      .filter(s => !coreKeys.has(s.key))
+      .sort((a,b) => (a.n+a.l)-(b.n+b.l) || a.n-b.n)
+      .map(s => s.key+superscript(s.electrons)).join(' ');
   }
   function components(l) { return l===1 ? [1,-1,0] : Array.from({length:2*l+1},(_,i)=>i-l); }
   function occupancy(electrons,l,index) {

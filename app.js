@@ -295,7 +295,7 @@ function drawGlow(w,h) {
   for(const o of orbitals) {
     const image=OrbitalVisual.projectVolume(o,{width:w,height:h,scale,yaw:state.yaw,pitch:state.pitch,
       lens,cut:$('cut').value,slice:state.viewExtent*.065,phase:$('phase').checked,color:visualPalette[o.l],
-      maxSize:state.atom&&state.atomCache.orbitals.length>16?80:144});
+      maxSize:state.groups.length<=3?224:state.groups.length>16?80:144});
     volumeCanvas.width=image.width;volumeCanvas.height=image.height;
     const g=volumeCanvas.getContext('2d'),pixels=g.createImageData(image.width,image.height);
     pixels.data.set(image.pixels);g.putImageData(pixels,0,0);

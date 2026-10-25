@@ -52,3 +52,17 @@ for(const [m,axis] of [[1,[.3,0,0]],[-1,[0,.3,0]],[0,[0,0,.3]]]){
 }
 assert.ok(V.projectVolume({...hydrogen,occupancy:0},options).pixels.every((value,i)=>i%4!==3||value===0));
 console.log('PASS: continuous deterministic density projections, centered s glow, three distinct p axes, and occupancy-only opacity changes.');
+const outerP={n:7,l:1,m:1,charge:1,occupancy:2};
+const bands=V.projectVolume(outerP,{width:448,height:448,scale:210/V.volume(outerP).extent,yaw:0,pitch:0,maxSize:224});
+const mid=Math.floor(bands.width/2),row=Math.floor(bands.height/2);
+const profile=Array.from({length:mid},(_,x)=>bands.pixels[(row*bands.width+mid+x)*4+3]);
+const peaks=[];
+for(let x=1;x<profile.length-1;x++)if(profile[x]>80&&profile[x]>=profile[x-1]&&profile[x]>profile[x+1])peaks.push(x);
+let separated=0;
+for(let i=1;i<peaks.length;i++){
+  const valley=Math.min(...profile.slice(peaks[i-1],peaks[i]+1));
+  if(valley<Math.min(profile[peaks[i-1]],profile[peaks[i]])*.5)separated++;
+}
+assert.ok(profile[0]<5,'the p nodal plane remains dark');
+assert.ok(separated>=3,'high-shell p fields retain at least four bright bands separated by dark valleys');
+console.log('PASS: distinct high-shell p bands with dark gaps at focused-view detail.');

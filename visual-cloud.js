@@ -100,7 +100,7 @@ const OrbitalVisual = (() => {
   function volume(o) {
     const key=`${o.n}/${o.l}/${o.m}`;
     if(volumes.has(key))return volumes.get(key);
-    const size=41,extent=M.radialDistribution(o.n,o.l).extent,data=new Float32Array(size**3);
+    const size=o.n>=4?65:41,extent=M.radialDistribution(o.n,o.l).extent,data=new Float32Array(size**3);
     let peak=0;
     for(let z=0;z<size;z++)for(let y=0;y<size;y++)for(let x=0;x<size;x++) {
       const px=2*x/(size-1)-1,py=2*y/(size-1)-1,pz=2*z/(size-1)-1;
@@ -114,7 +114,7 @@ const OrbitalVisual = (() => {
       columns[0][y*size+x]+=density;columns[1][z*size+x]+=density;columns[2][z*size+y]+=density;
     }
     let columnPeak=0;for(const column of columns)for(const value of column)columnPeak=Math.max(columnPeak,value);
-    const result={size,extent,data,exposure:2/(columnPeak*2/(size-1)||1)};
+    const result={size,extent,data,exposure:2.4/(columnPeak*2/(size-1)||1)};
     if(volumes.size>=64)volumes.delete(volumes.keys().next().value);
     volumes.set(key,result);return result;
   }
@@ -138,7 +138,7 @@ const OrbitalVisual = (() => {
     for(let y=0;y<h;y++)for(let x=0;x<w;x++) {
       const u=(left+(x+.5)*screenWidth/w-width/2)/radius,v=-(top+(y+.5)*screenHeight/h-height/2)/radius;
       const rr=u*u+v*v;if(rr>=1)continue;
-      const half=Math.sqrt(1-rr),steps=64,step=2*half/steps;let positive=0,negative=0;
+      const half=Math.sqrt(1-rr),steps=o.n>=4?128:64,step=2*half/steps;let positive=0,negative=0;
       for(let j=0;j<steps;j++) {
         const depth=-half+(j+.5)*step,yy=v*cp+depth*sp,zz=-v*sp+depth*cp;
         let px=u*cy-zz*sy,py=yy,pz=u*sy+zz*cy;
@@ -147,10 +147,12 @@ const OrbitalVisual = (() => {
         const a=field(grid,px,py,pz);if(a>=0)positive+=a*a;else negative+=a*a;
       }
       const sum=positive+negative;if(!sum)continue;
-      const opacity=1-Math.exp(-sum*step*grid.exposure*o.occupancy),offset=(y*w+x)*4;
+      const density=1-Math.exp(-sum*step*grid.exposure*o.occupancy);
+      // An S-curve separates dim gaps from bright bands without clipping either.
+      const opacity=density*density/(density*density+(1-density)**2),offset=(y*w+x)*4;
       const tint=phase?[96,234,214].map((c,k)=>(c*positive+[175,138,255][k]*negative)/sum):color;
       for(let k=0;k<3;k++)pixels[offset+k]=tint[k]+(255-tint[k])*opacity**4*.1;
-      pixels[offset+3]=255*opacity*.85;
+      pixels[offset+3]=255*opacity*.95;
     }
     return {width:w,height:h,left,top,screenWidth,screenHeight,pixels};
   }

@@ -114,7 +114,7 @@ const OrbitalVisual = (() => {
       columns[0][y*size+x]+=density;columns[1][z*size+x]+=density;columns[2][z*size+y]+=density;
     }
     let columnPeak=0;for(const column of columns)for(const value of column)columnPeak=Math.max(columnPeak,value);
-    const result={size,extent,data,exposure:4/(columnPeak*2/(size-1)||1)};
+    const result={size,extent,data,exposure:2/(columnPeak*2/(size-1)||1)};
     if(volumes.size>=64)volumes.delete(volumes.keys().next().value);
     volumes.set(key,result);return result;
   }
@@ -149,8 +149,8 @@ const OrbitalVisual = (() => {
       const sum=positive+negative;if(!sum)continue;
       const opacity=1-Math.exp(-sum*step*grid.exposure*o.occupancy),offset=(y*w+x)*4;
       const tint=phase?[96,234,214].map((c,k)=>(c*positive+[175,138,255][k]*negative)/sum):color;
-      for(let k=0;k<3;k++)pixels[offset+k]=tint[k]+(255-tint[k])*opacity**4*.4;
-      pixels[offset+3]=255*opacity;
+      for(let k=0;k<3;k++)pixels[offset+k]=tint[k]+(255-tint[k])*opacity**4*.1;
+      pixels[offset+3]=255*opacity*.85;
     }
     return {width:w,height:h,left,top,screenWidth,screenHeight,pixels};
   }

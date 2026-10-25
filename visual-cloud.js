@@ -127,7 +127,7 @@ const OrbitalVisual = (() => {
     const c=d[i+n*n]*(1-fx)+d[i+n*n+1]*fx,e=d[i+n*n+n]*(1-fx)+d[i+n*n+n+1]*fx;
     return (a*(1-fy)+b*fy)*(1-fz)+(c*(1-fy)+e*fy)*fz;
   }
-  function projectVolume(o,{width,height,scale,yaw,pitch,lens=false,cut='none',slice=1,phase=false,color=[255,220,110],maxSize=144}) {
+  function projectVolume(o,{width,height,scale,yaw,pitch,lens=false,cut='none',slice=1,phase=false,color=[255,220,110],maxSize=144,raySteps=o.n>=4?128:64}) {
     const grid=volume(o),physicalExtent=grid.extent/(o.charge||1);
     const displayExtent=lens?Math.log1p(physicalExtent):physicalExtent,radius=displayExtent*scale;
     const left=Math.max(0,width/2-radius),top=Math.max(0,height/2-radius);
@@ -138,7 +138,7 @@ const OrbitalVisual = (() => {
     for(let y=0;y<h;y++)for(let x=0;x<w;x++) {
       const u=(left+(x+.5)*screenWidth/w-width/2)/radius,v=-(top+(y+.5)*screenHeight/h-height/2)/radius;
       const rr=u*u+v*v;if(rr>=1)continue;
-      const half=Math.sqrt(1-rr),steps=o.n>=4?128:64,step=2*half/steps;let positive=0,negative=0;
+      const half=Math.sqrt(1-rr),steps=raySteps,step=2*half/steps;let positive=0,negative=0;
       for(let j=0;j<steps;j++) {
         const depth=-half+(j+.5)*step,yy=v*cp+depth*sp,zz=-v*sp+depth*cp;
         let px=u*cy-zz*sy,py=yy,pz=u*sy+zz*cy;

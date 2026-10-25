@@ -283,6 +283,9 @@ function visualOrbital(o) {
   return state.atom&&state.active>=5&&state.active<=10?{...o,charge:visualReferenceCharges.get(o.key)}:o;
 }
 let volumeCanvas;
+let glowPreviewUntil=0,glowNeedsRefinement=false;
+const glowMoving=()=>Boolean(state.drag||$('spin').checked||performance.now()<glowPreviewUntil);
+function moveView(){glowPreviewUntil=performance.now()+150;state.dirty=true;}
 function drawGlow(w,h) {
   volumeCanvas??=document.createElement('canvas');
   const lens=state.atom&&$('core-lens').checked;
@@ -292,10 +295,13 @@ function drawGlow(w,h) {
   // overlapping yellow and blue fields out to additive white.
   const orbitals=state.groups.map(g=>visualOrbital(g.orbital)).filter(o=>o.occupancy)
     .sort((a,b)=>M.radialDistribution(b.n,b.l).extent/b.charge-M.radialDistribution(a.n,a.l).extent/a.charge);
+  const moving=glowMoving();glowNeedsRefinement=moving;
+  const previewSize=Math.max(20,Math.min(80,Math.floor(Math.sqrt(6400/Math.max(1,orbitals.length)))));
   for(const o of orbitals) {
     const image=OrbitalVisual.projectVolume(o,{width:w,height:h,scale,yaw:state.yaw,pitch:state.pitch,
       lens,cut:$('cut').value,slice:state.viewExtent*.065,phase:$('phase').checked,color:visualPalette[o.l],
-      maxSize:state.groups.length<=3?224:state.groups.length>16?80:144});
+      maxSize:moving?previewSize:state.groups.length<=3?224:state.groups.length>16?80:144,
+      raySteps:moving?32:o.n>=4?128:64});
     volumeCanvas.width=image.width;volumeCanvas.height=image.height;
     const g=volumeCanvas.getContext('2d'),pixels=g.createImageData(image.width,image.height);
     pixels.data.set(image.pixels);g.putImageData(pixels,0,0);
@@ -409,6 +415,7 @@ function render(time) {
       }
       state.lastRefresh=time;state.dirty=true;
     }
+    if(glowNeedsRefinement&&visualMode()&&!$('emphasize').checked&&!glowMoving())state.dirty=true;
     if(state.dirty) {draw();state.dirty=false;}
   }
   requestAnimationFrame(render);
@@ -432,15 +439,15 @@ $('core-lens').onchange=()=>{describe();state.dirty=true;};
 for(const id of ['phase','nodes','axes','cut','emphasize'])$(id).onchange=()=>{describe();state.dirty=true;};
 $('live').onchange=()=>state.lastRefresh=performance.now();
 $('reset').onclick=reset;canvas.ondblclick=reset;
-$('zoom').oninput=()=>{state.zoom=+$('zoom').value;state.dirty=true;};
+$('zoom').oninput=()=>{state.zoom=+$('zoom').value;moveView();};
 canvas.onpointerdown=e=>{state.drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);};
 canvas.onpointermove=e=>{
   if(!state.drag)return;
   state.yaw+=(e.clientX-state.drag[0])*.008;state.pitch=Math.max(-1.55,Math.min(1.55,state.pitch+(e.clientY-state.drag[1])*.008));
-  state.drag=[e.clientX,e.clientY];state.dirty=true;
+  state.drag=[e.clientX,e.clientY];moveView();
 };
 canvas.onpointerup=canvas.onpointercancel=canvas.onlostpointercapture=()=>state.drag=null;
-canvas.addEventListener('wheel',e=>{e.preventDefault();state.zoom=Math.max(.4,Math.min(MAX_ZOOM,state.zoom*Math.exp(-e.deltaY*.001)));$('zoom').value=state.zoom;state.dirty=true;},{passive:false});
+canvas.addEventListener('wheel',e=>{e.preventDefault();state.zoom=Math.max(.4,Math.min(MAX_ZOOM,state.zoom*Math.exp(-e.deltaY*.001)));$('zoom').value=state.zoom;moveView();},{passive:false});
 new ResizeObserver(()=>state.dirty=true).observe(canvas);
 document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>choose(...b.dataset.preset.split(',').map(Number)));
 buildTable();syncMode();generate();requestAnimationFrame(render);

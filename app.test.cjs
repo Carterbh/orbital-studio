@@ -293,3 +293,18 @@ run(`$('emphasize').checked=false;$('emphasize').onchange();draw();`);
 assert.equal(ids.get('live').disabled,true,'continuous fields do not pretend to resample particles');
 assert.equal(run('state.groups.flatMap(g=>g.points).length'),0);
 console.log('PASS: all three nitrogen p fields remain distinct and carbon/fluorine/neon share field sizes with occupancy-driven opacity.');
+run(`choose(7,1,1);$('spin').checked=false;$('core-lens').checked=false;
+  var projectionCalls=[];var originalProjection=OrbitalVisual.projectVolume;
+  OrbitalVisual.projectVolume=(o,options)=>{projectionCalls.push(options);return {width:2,height:2,left:0,top:0,screenWidth:2,screenHeight:2,pixels:new Uint8ClampedArray(16)};};
+  canvas.onpointerdown({clientX:0,clientY:0,pointerId:1});
+  canvas.onpointermove({clientX:10,clientY:5});render(performance.now());`);
+assert.ok(run('projectionCalls.every(o=>o.maxSize<=80&&o.raySteps===32)'),'dragging uses bounded preview work');
+assert.equal(run('glowNeedsRefinement'),true);
+run(`canvas.onpointerup();glowPreviewUntil=0;projectionCalls=[];render(performance.now());`);
+assert.ok(run('projectionCalls.length>0&&projectionCalls.every(o=>o.maxSize===224&&o.raySteps===128)'),
+  'stopping restores sharp high-shell detail even without another input event');
+assert.equal(run('glowNeedsRefinement'),false);
+run('projectionCalls=[];render(performance.now());');
+assert.equal(run('projectionCalls.length'),0,'the settled cloud does not recompute every frame');
+run('OrbitalVisual.projectVolume=originalProjection;');
+console.log('PASS: fast interaction preview, automatic full-detail refinement, and no repeated idle projection.');

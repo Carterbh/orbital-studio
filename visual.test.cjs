@@ -34,3 +34,21 @@ for(const [n,l,m] of [[2,0,0],[2,1,1],[3,2,0],[4,3,2],[7,6,0]]) {
   }
 }
 console.log('PASS: spherical 1s density contours, 2s radial regions, separate signed p lobes, finite d/f/i surfaces, and reusable geometry.');
+const options={width:160,height:160,scale:18,yaw:0,pitch:0,maxSize:80};
+const hydrogen={n:1,l:0,m:0,occupancy:1,charge:1};
+const glow=V.projectVolume(hydrogen,options),paired=V.projectVolume({...hydrogen,occupancy:2},options);
+assert.equal(glow.width,paired.width);
+let brighter=0;
+for(let i=3;i<glow.pixels.length;i+=4){assert.ok(paired.pixels[i]>=glow.pixels[i]);if(paired.pixels[i]>glow.pixels[i])brighter++;}
+assert.ok(brighter>0,'paired occupation increases opacity without changing field dimensions');
+assert.deepEqual(V.projectVolume(hydrogen,options).pixels,glow.pixels,'continuous fields are deterministic');
+const center=(Math.floor(glow.height/2)*glow.width+Math.floor(glow.width/2))*4+3;
+assert.ok(glow.pixels[center]>glow.pixels[3],'1s is brightest at the origin');
+for(const [m,axis] of [[1,[.3,0,0]],[-1,[0,.3,0]],[0,[0,0,.3]]]){
+  const grid=V.volume({n:2,l:1,m});
+  assert.ok(Math.abs(V.field(grid,...axis))>.01,'each p orientation has its own axial field');
+  const perpendicular=axis[0]?[0,.3,0]:[.3,0,0];
+  assert.ok(Math.abs(V.field(grid,...perpendicular))<1e-6,'p angular nodes stay empty');
+}
+assert.ok(V.projectVolume({...hydrogen,occupancy:0},options).pixels.every((value,i)=>i%4!==3||value===0));
+console.log('PASS: continuous deterministic density projections, centered s glow, three distinct p axes, and occupancy-only opacity changes.');

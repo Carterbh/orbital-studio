@@ -6,7 +6,7 @@ const vm=require('node:vm');
 const path=require('node:path');
 const html=fs.readFileSync(path.join(__dirname,'index.html'),'utf8');
 const noop=()=>{};
-const context2d=new Proxy({}, {get:(o,k)=>o[k]??(k==='createRadialGradient'?()=>({addColorStop:noop}):noop),set:(o,k,v)=>(o[k]=v,true)});
+const context2d=new Proxy({}, {get:(o,k)=>o[k]??(k==='createRadialGradient'?()=>({addColorStop:noop}):k==='createImageData'?(w,h)=>({data:new Uint8ClampedArray(w*h*4)}):noop),set:(o,k,v)=>(o[k]=v,true)});
 class Element {
   constructor(tag='div') {Object.assign(this,{tag,children:[],style:{},dataset:{},attributes:{},value:'',checked:false,disabled:false,hidden:false,className:'',clientWidth:900,clientHeight:550,width:520,height:180});}
   append(...nodes){this.children.push(...nodes);}
@@ -257,7 +257,7 @@ context2d.drawImage=()=>glowDraws++;
 run(`$('count').value='visual';$('single').checked=false;$('emphasize').checked=false;pickElement(2);draw();`);
 assert.ok(glowDraws>0,'visual mode paints soft glow sprites');
 assert.match(ids.get('status').textContent,/Visual cloud/);
-assert.equal(run('state.groups.reduce((sum,g)=>sum+g.points.length,0)'),1200);
+assert.equal(run('state.groups.reduce((sum,g)=>sum+g.points.length,0)'),0,'visual clouds contain no point samples');
 run(`$('single').checked=true;$('single').onchange();draw();`);
 assert.equal(run('state.groups.reduce((sum,g)=>sum+g.points.length,0)'),2,'electron dots override visual mode');
 run(`$('single').checked=false;$('single').onchange();$('emphasize').checked=true;$('emphasize').onchange();draw();`);
@@ -275,3 +275,21 @@ assert.ok(run('state.groups.reduce((sum,g)=>sum+g.points.length,0)')<=6000,'visu
 run(`$('emphasize').checked=false;$('count').value='14000';$('count').onchange();draw();`);
 assert.equal(run('state.groups.reduce((sum,g)=>sum+g.points.length,0)'),14000,'numeric cloud mode restores normally');
 console.log('PASS: visual glows and density surfaces, electron-dot priority, stable contours, empty selections, phase/cutaways, heavy atoms, and numeric-mode restoration.');
+run(`$('count').value='visual';$('phase').checked=false;$('emphasize').checked=true;
+  var surfaceCalls=[];var originalSurface=OrbitalVisual.surface;
+  OrbitalVisual.surface=(o,r)=>{surfaceCalls.push({...o});return originalSurface(o,r);};
+  pickElement(7);draw();`);
+assert.deepEqual(Array.from(run('surfaceCalls.filter(o=>o.l===1).map(o=>o.m)').values()).sort(),[-1,0,1],
+  'nitrogen keeps all three p dumbbells with phase colors off');
+assert.ok(run('surfaceCalls.every(o=>o.m!=="all")'),'never replace individual fields with a spherical sublevel');
+run('OrbitalVisual.surface=originalSurface;');
+const reference=run('state.orbitals.map(o=>visualOrbital(o).charge).join()');
+for(const z of [6,9,10]) {
+  run(`pickElement(${z});`);
+  assert.equal(run('state.orbitals.map(o=>visualOrbital(o).charge).join()'),reference,'B–Ne fields share visual sizes');
+  assert.equal(run('state.viewExtent'),8);
+}
+run(`$('emphasize').checked=false;$('emphasize').onchange();draw();`);
+assert.equal(ids.get('live').disabled,true,'continuous fields do not pretend to resample particles');
+assert.equal(run('state.groups.flatMap(g=>g.points).length'),0);
+console.log('PASS: all three nitrogen p fields remain distinct and carbon/fluorine/neon share field sizes with occupancy-driven opacity.');

@@ -2,6 +2,7 @@
 const $=id=>document.getElementById(id), M=OrbitalModel;
 const canvas=$('scene'), ctx=canvas.getContext('2d');
 const MAX_ZOOM=300;
+const visualMode=()=>$('count').value==='visual'&&!$('single').checked;
 const state={selected:7,active:7,atom:true,n:2,l:1,m:1,sublevel:'all',orbital:'all',
   yaw:.55,pitch:.25,zoom:1,drag:null,extent:1,orbitals:[],groups:[],roots:[],lastRefresh:0,dirty:true};
 const activeElement=()=>M.elements[state.active-1];
@@ -107,7 +108,7 @@ function currentOrbitals() {
 }
 function makeGroups(orbitals) {
   const single=$('single').checked,total=orbitals.reduce((sum,o)=>sum+o.occupancy,0);
-  const budget=+$('count').value,perElectron=Math.max(1,Math.round(budget/10));
+  const budget=$('count').value==='visual'?6000:+$('count').value,perElectron=Math.max(1,Math.round(budget/10));
   // Fixed samples per electron for light atoms, capped for heavy atoms. Each
   // retained sample carries its electron-density weight once the cap is reached.
   const count=state.atom?Math.min(budget,total*perElectron):budget;
@@ -129,6 +130,10 @@ function generate(reuseAtom=false) {
   state.empty=state.atom && state.orbitals.every(o=>o.occupancy===0);
   $('count').disabled=$('single').checked;
   $('emphasize').disabled=$('single').checked;
+  $('emphasis-help').textContent=visualMode()?
+    'Shape the glow into translucent density surfaces. Nested regions show the denser parts of each orbital; they are probability contours, not hard boundaries.':
+    'Strongly brightens dense lobe interiors and suppresses sparse haze to reveal orbital structure. Visual emphasis only; positions and the radial graph stay unchanged. Available in cloud mode.';
+  $('visual-help').hidden=!visualMode();
   state.groups=state.atom?state.atomCache.groups.filter(g=>state.orbitals.includes(g.orbital)):makeGroups(state.orbitals);
   if($('single').checked)state.groups=state.groups.filter(g=>g.points.length);
   state.extent=state.empty?1:M.mixtureExtent(state.orbitals);
@@ -149,6 +154,10 @@ function describe() {
   $('title').textContent=state.atom?`${element.name} · ${focus}`:state.n+M.label(state.l,state.m);
   const sampleCount=state.groups.reduce((sum,g)=>sum+g.points.length,0);
   $('status').textContent=`${sampleCount.toLocaleString()} ${$('single').checked?'electron dot':'probability sample'}${sampleCount===1?'':'s'} · ${none?'all orbitals hidden':empty?'empty orbital · 0 electrons':$('single').checked?'one dot per electron':state.atom?electrons+' electrons represented':'one-electron orbital'}${state.atom&&element.predicted?' · predicted configuration':''}`;
+  if(visualMode())$('status').textContent=`Visual cloud · ${$('emphasize').checked?'translucent density regions':'soft probability glow'} · ${electrons} electron${electrons===1?'':'s'} represented`;
+  $('density-intro').textContent=visualMode()?
+    'Opacity represents electron probability density. The soft view blends nearby samples into glows. Emphasized regions show nested density contours containing approximately 88% and 60% of each orbital density on a coarse 3D grid. Opacity also reflects orbital occupancy. These surfaces are not solid boundaries; the electron can be found outside them.':
+    'Each dot is a possible position sampled from |ψ|². Dense regions mean higher probability per volume. The dots are not electron paths. In element mode, colors identify sublevels. Wavefunction signs show phase, not electric charge.';
   const stats=state.atom ? [
     [electrons,'Electrons in this view'],[sublevels,'Sublevels in this view'],
     [state.orbitals.filter(o=>o.occupancy).length,'Occupied orbitals'],[empty?'—':state.extent.toFixed(2)+' a₀','Model radius enclosing ≈99.5%']
@@ -178,9 +187,9 @@ function updateLegend() {
     }
     for(const s of [...sublevels.values()].sort(aufbauCompare))
       add(`${$('phase').checked?'':'● '}${s.key} · ${s.electrons} e⁻`,$('phase').checked?'#b9c9d7':s.color);
-  } else if(!$('phase').checked)add('● probability samples','#85d8fa');
+  } else if(!$('phase').checked)add(visualMode()?'● probability density':'● probability samples','#85d8fa');
   if(state.roots.length && $('nodes').checked)add('○ radial node','#a7c6dc');
-  if($('emphasize').checked&&!$('single').checked)add('Density contrast enhanced','#e6c786');
+  if($('emphasize').checked&&!$('single').checked)add(visualMode()?'Nested density regions':'Density contrast enhanced','#e6c786');
 }
 function drawBoxes() {
   const element=activeElement();
@@ -239,7 +248,7 @@ function project(x,y,z,w,h) {
   const cy=Math.cos(state.yaw),sy=Math.sin(state.yaw),cp=Math.cos(state.pitch),sp=Math.sin(state.pitch);
   const xx=x*cy+z*sy,zz=-x*sy+z*cy,yy=y*cp-zz*sp;
   const scale=Math.min(w,h)*.36*state.zoom/(lens?Math.log1p(state.viewExtent):state.viewExtent);
-  return [w/2+xx*scale,h/2-yy*scale];
+  return [w/2+xx*scale,h/2-yy*scale,y*sp+zz*cp];
 }
 function line3(points,w,h,color) {
   ctx.strokeStyle=color;ctx.beginPath();
@@ -259,6 +268,104 @@ function densityLayers(group) {
   group.emphasisLayers=layers;
   return layers;
 }
+const glowSprites=new Map();
+function glowSprite(color) {
+  if(glowSprites.has(color))return glowSprites.get(color);
+  const sprite=document.createElement('canvas');sprite.width=sprite.height=64;
+  const g=sprite.getContext('2d');
+  // Mask a solid color by a soft radial opacity falloff; works for hsl and hex.
+  g.fillStyle=color;g.fillRect(0,0,64,64);g.globalCompositeOperation='destination-in';
+  const mask=g.createRadialGradient(32,32,0,32,32,32);
+  mask.addColorStop(0,'rgba(255,255,255,0.85)');mask.addColorStop(.25,'rgba(255,255,255,0.5)');
+  mask.addColorStop(.6,'rgba(255,255,255,0.1)');mask.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=mask;g.fillRect(0,0,64,64);glowSprites.set(color,sprite);return sprite;
+}
+function drawGlow(w,h) {
+  const phase=$('phase').checked,cut=$('cut').value;
+  ctx.globalCompositeOperation='lighter';
+  for(const group of state.groups) {
+    if(!group.orbital.occupancy||!group.points.length)continue;
+    const o=group.orbital,radius=M.radialDistribution(o.n,o.l).extent/o.charge*.07;
+    const lens=state.atom&&$('core-lens').checked;
+    const scale=Math.min(w,h)*.36*state.zoom/(lens?Math.log1p(state.viewExtent):state.viewExtent);
+    ctx.globalAlpha=Math.min(.4,28*o.occupancy/group.points.length);
+    for(const p of group.points) {
+      if((cut==='half'&&p[2]>0)||(cut==='slice'&&Math.abs(p[2])>state.viewExtent*.065))continue;
+      const q=project(...p.slice(0,3),w,h),r=Math.max(1.5,radius*scale/(lens?1+Math.hypot(...p.slice(0,3)):1));
+      if(q[0]+r<0||q[0]-r>w||q[1]+r<0||q[1]-r>h)continue;
+      const color=phase?(p[3]?'#60ead6':'#af8aff'):state.atom?o.color:'#85d8fa';
+      ctx.drawImage(glowSprite(color),q[0]-r,q[1]-r,2*r,2*r);
+    }
+  }
+  ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;
+}
+function clipSurface(points,limit,keepBelow) {
+  const result=[];
+  for(let i=0;i<points.length;i++) {
+    const a=points[i],b=points[(i+1)%points.length],insideA=keepBelow?a[2]<=limit:a[2]>=limit,insideB=keepBelow?b[2]<=limit:b[2]>=limit;
+    if(insideA)result.push(a);
+    if(insideA!==insideB){const t=(limit-a[2])/(b[2]-a[2]);result.push(a.map((v,k)=>v+t*(b[k]-v)));}
+  }
+  return result;
+}
+function drawDensitySurfaces(w,h) {
+  const triangles=[],phase=$('phase').checked,cut=$('cut').value;
+  // Keep the mesh quality stable when hiding other orbitals.
+  const resolution=state.atom?(state.atomCache.orbitals.length>16?12:20):28;
+  const sublevels=new Map();
+  for(const group of state.groups){const key=group.orbital.key;if(!sublevels.has(key))sublevels.set(key,[]);sublevels.get(key).push(group);}
+  const groups=[...sublevels.values()].flatMap(list=>{
+    const o=list[0].orbital;
+    // The addition theorem makes a complete, equally occupied sublevel radial.
+    // Combining its density avoids drawing identical overlapping shell meshes.
+    return !phase&&list.length===2*o.l+1&&list.every(g=>g.orbital.occupancy===o.occupancy)?
+      [{orbital:{...o,m:'all',occupancy:list.length*o.occupancy}}]:list;
+  });
+  const cy=Math.cos(state.yaw),sy=Math.sin(state.yaw),cp=Math.cos(state.pitch),sp=Math.sin(state.pitch);
+  const lens=state.atom&&$('core-lens').checked;
+  const scale=Math.min(w,h)*.36*state.zoom/(lens?Math.log1p(state.viewExtent):state.viewExtent);
+  const projectVertex=(x,y,z)=>{
+    if(lens){const r=Math.hypot(x,y,z),f=r?Math.log1p(r)/r:1;x*=f;y*=f;z*=f;}
+    const xx=x*cy+z*sy,zz=-x*sy+z*cy,yy=y*cp-zz*sp;
+    return [w/2+xx*scale,h/2-yy*scale,y*sp+zz*cp];
+  };
+  for(const group of groups) {
+    const o=group.orbital;if(!o.occupancy)continue;
+    const model=OrbitalVisual.surface(o,resolution);
+    model.layers.forEach((layer,layerIndex)=>{
+      const faces=layer.faces;
+      const projected=[];
+      if(cut==='none')for(let j=0;j<layer.vertices.length;j+=3)
+        projected.push(projectVertex(layer.vertices[j]/o.charge,layer.vertices[j+1]/o.charge,layer.vertices[j+2]/o.charge));
+      for(let i=0;i<faces.length;i+=13) {
+        let q;
+        if(cut==='none'){const j=i/13*3;q=[projected[layer.indices[j]],projected[layer.indices[j+1]],projected[layer.indices[j+2]]];}
+        else {
+          let points=[0,3,6].map(j=>[faces[i+j]/o.charge,faces[i+j+1]/o.charge,faces[i+j+2]/o.charge]);
+          if(cut==='half')points=clipSurface(points,0,true);
+          if(cut==='slice'){points=clipSurface(points,state.viewExtent*.065,true);points=clipSurface(points,-state.viewExtent*.065,false);}
+          if(points.length<3)continue;
+          q=points.map(p=>projectVertex(...p));
+        }
+        if(q.every(p=>p[0]<0)||q.every(p=>p[0]>w)||q.every(p=>p[1]<0)||q.every(p=>p[1]>h))continue;
+        const nx=faces[i+9]*cy+faces[i+11]*sy;
+        const nz=-faces[i+9]*sy+faces[i+11]*cy;
+        const ny=faces[i+10]*cp-nz*sp;
+        const depthNormal=faces[i+10]*sp+nz*cp;
+        const light=.35+.65*Math.abs(nx*-.35+ny*.45+depthNormal*.82);
+        const color=phase?(faces[i+12]?'#60ead6':'#af8aff'):state.atom?o.color:'#85d8fa';
+        triangles.push({q,color,depth:q.reduce((sum,p)=>sum+p[2],0)/q.length,
+          alpha:(1-(1-(layerIndex?.23:.11))**o.occupancy)*light});
+      }
+    });
+  }
+  triangles.sort((a,b)=>a.depth-b.depth);
+  for(const face of triangles) {
+    ctx.fillStyle=face.color;ctx.globalAlpha=face.alpha;ctx.beginPath();
+    face.q.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
 function draw() {
   const w=canvas.clientWidth,h=canvas.clientHeight,dpr=Math.min(devicePixelRatio||1,2);
   if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)) {canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
@@ -271,7 +378,8 @@ function draw() {
   const cut=$('cut').value,phase=$('phase').checked;
   const single=$('single').checked;
   const emphasis=$('emphasize').checked&&!single;
-  for(const group of state.groups)
+  if(visualMode())emphasis?drawDensitySurfaces(w,h):drawGlow(w,h);
+  else for(const group of state.groups)
   for(const layer of emphasis?densityLayers(group):[{alpha:single?1:.36,points:group.points}])
   for(const sign of phase?[false,true]:[null]) {
     ctx.globalAlpha=single?1:1-(1-layer.alpha)**group.sampleWeight;
@@ -289,14 +397,14 @@ function draw() {
     const p=[0,0,0];p[i]=state.viewExtent*1.05;line3([[0,0,0],p],w,h,['#ea9393','#a1dba2','#9ebcf6'][i]);
     const q=project(...p,w,h);ctx.fillStyle='#cad8e8';ctx.font='12px Segoe UI';ctx.fillText(name,q[0]+5,q[1]);
   });
-  if(!single){ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(w/2,h/2,3,0,Math.PI*2);ctx.fill();}
+  if(!single&&!visualMode()){ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(w/2,h/2,3,0,Math.PI*2);ctx.fill();}
 }
 let lastFrame=0;
 function render(time) {
   const delta=Math.min(50,time-lastFrame);lastFrame=time;
   if(!document.hidden) {
     if($('spin').checked&&!state.drag) {state.yaw+=delta*.00018;state.dirty=true;}
-    if($('live').checked&&time-state.lastRefresh>=+$('interval').value) {
+    if($('live').checked&&!(visualMode()&&$('emphasize').checked)&&time-state.lastRefresh>=+$('interval').value) {
       for(const group of state.groups) {
         const amount=$('single').checked?group.points.length:Math.ceil(group.points.length/4);
         for(let i=0;i<amount;i++) {group.points[group.cursor]=M.sample(group.orbital);group.cursor=(group.cursor+1)%group.points.length;}
@@ -324,7 +432,7 @@ $('m').onchange=()=>choose(state.n,state.l,+$('m').value);
 $('count').onchange=generate;$('sample').onclick=generate;
 $('single').onchange=()=>{if($('single').checked)$('live').checked=true;generate();};
 $('core-lens').onchange=()=>{describe();state.dirty=true;};
-for(const id of ['phase','nodes','axes','cut','emphasize'])$(id).onchange=()=>{updateLegend();state.dirty=true;};
+for(const id of ['phase','nodes','axes','cut','emphasize'])$(id).onchange=()=>{describe();state.dirty=true;};
 $('live').onchange=()=>state.lastRefresh=performance.now();
 $('reset').onclick=reset;canvas.ondblclick=reset;
 $('zoom').oninput=()=>{state.zoom=+$('zoom').value;state.dirty=true;};

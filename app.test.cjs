@@ -6,7 +6,7 @@ const vm=require('node:vm');
 const path=require('node:path');
 const html=fs.readFileSync(path.join(__dirname,'index.html'),'utf8');
 const noop=()=>{};
-const context2d=new Proxy({}, {get:(o,k)=>o[k]??noop,set:(o,k,v)=>(o[k]=v,true)});
+const context2d=new Proxy({}, {get:(o,k)=>o[k]??(k==='createRadialGradient'?()=>({addColorStop:noop}):noop),set:(o,k,v)=>(o[k]=v,true)});
 class Element {
   constructor(tag='div') {Object.assign(this,{tag,children:[],style:{},dataset:{},attributes:{},value:'',checked:false,disabled:false,hidden:false,className:'',clientWidth:900,clientHeight:550,width:520,height:180});}
   append(...nodes){this.children.push(...nodes);}
@@ -27,7 +27,7 @@ const document={hidden:false,getElementById:id=>ids.get(id)??null,createElement:
     selector==='.element'?ids.get('periodic-table').children.filter(e=>e.className.split(' ').includes('element')):[]};
 const sandbox={document,performance,console,devicePixelRatio:1,requestAnimationFrame:noop,ResizeObserver:class{observe(){}}};
 vm.createContext(sandbox);
-for(const name of ['elements.js','app.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,name),'utf8'),sandbox,{filename:name});
+for(const name of ['elements.js','visual-cloud.js','app.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,name),'utf8'),sandbox,{filename:name});
 const run=source=>vm.runInContext(source,sandbox);
 assert.equal(document.querySelectorAll('.element').length,118);
 for(const button of document.querySelectorAll('.element')){
@@ -251,3 +251,27 @@ assert.ok(!boxLabels().some(text=>text.startsWith('5s')),'do not invent occupanc
 console.log('PASS: Aufbau ordering in both lists and correct total/focused electron counts, including Cr and Pd exceptions.');
 console.log('PASS: density contrast brightens dense samples without changing positions or radius, refreshes during animation, and preserves single/empty-orbital behavior.');
 console.log('PASS: app startup, 118 element views, 140 free-orbital views, empty and partial occupancy, live resampling, core lens, Radon at 26,000 samples, presets, search, and mode switching. Visual browser QA still required.');
+assert.match(html,/<option value="visual">Visual cloud<\/option>/);
+let glowDraws=0;
+context2d.drawImage=()=>glowDraws++;
+run(`$('count').value='visual';$('single').checked=false;$('emphasize').checked=false;pickElement(2);draw();`);
+assert.ok(glowDraws>0,'visual mode paints soft glow sprites');
+assert.match(ids.get('status').textContent,/Visual cloud/);
+assert.equal(run('state.groups.reduce((sum,g)=>sum+g.points.length,0)'),1200);
+run(`$('single').checked=true;$('single').onchange();draw();`);
+assert.equal(run('state.groups.reduce((sum,g)=>sum+g.points.length,0)'),2,'electron dots override visual mode');
+run(`$('single').checked=false;$('single').onchange();$('emphasize').checked=true;$('emphasize').onchange();draw();`);
+assert.match(ids.get('status').textContent,/translucent density regions/);
+const surfacePoints=run('JSON.stringify(state.groups[0].points)');
+run(`$('live').checked=true;render(state.lastRefresh+1000);`);
+assert.equal(run('JSON.stringify(state.groups[0].points)'),surfacePoints,'analytic surfaces stay stable during live resampling');
+run(`$('all-sublevels-off').onclick();draw();plot();`);
+assert.equal(run('state.empty'),true);
+run(`$('all-orbitals').onclick();pickElement(6);setFocus('2p',0);draw();`);
+assert.equal(run('state.empty'),true,'empty orbitals have no visual surface');
+run(`choose(2,1,1);$('phase').checked=true;for(const cut of ['half','slice','none']){$('cut').value=cut;draw();}`);
+run(`pickElement(118);$('core-lens').checked=true;draw();`);
+assert.ok(run('state.groups.reduce((sum,g)=>sum+g.points.length,0)')<=6000,'visual sample budget stays bounded');
+run(`$('emphasize').checked=false;$('count').value='14000';$('count').onchange();draw();`);
+assert.equal(run('state.groups.reduce((sum,g)=>sum+g.points.length,0)'),14000,'numeric cloud mode restores normally');
+console.log('PASS: visual glows and density surfaces, electron-dot priority, stable contours, empty selections, phase/cutaways, heavy atoms, and numeric-mode restoration.');

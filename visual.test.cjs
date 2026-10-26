@@ -81,3 +81,10 @@ for(const cut of ['half','slice']){
   assert.ok(im.pixels.some((value,i)=>i%4===3&&value>0),'phase, lens, and cutaways retain a visible field');
 }
 console.log('PASS: foreground occlusion, core visible through nodal gaps, order independence, empty fields, and cutaways.');
+const model=require('./elements.js');
+const referenceCharges=new Map(model.atomOrbitals(model.elements[5]).map(o=>[o.key,o.charge]));
+const nitrogen=model.atomOrbitals(model.elements[6]).map(o=>({...o,charge:referenceCharges.get(o.key),visualColor:o.l?[96,181,255]:[255,221,115]}));
+const nitrogenOptions={width:225,height:225,scale:30,yaw:.55,pitch:.25,maxSize:225};
+const withCore=centerColor(V.projectCloud(nitrogen,nitrogenOptions));
+const withoutCore=centerColor(V.projectCloud(nitrogen.filter(o=>o.n!==1),nitrogenOptions));
+assert.ok(withCore.slice(0,3).every((value,i)=>Math.abs(value-withoutCore[i])<3),'nitrogen foreground fields obscure its compact 1s core');

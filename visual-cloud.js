@@ -191,7 +191,9 @@ const OrbitalVisual = (() => {
         if(!sum)continue;
         const density=1-Math.exp(-sum*step/localExtent*grid.exposure*o.occupancy);
         const opacity=.995*density**3.5/(density**3.5+(1-density)**3.5);
-        const weight=-Math.log1p(-opacity)/sum;
+        // Stronger depth absorption makes overlapping dense fields read as
+        // volumes while preserving transparent nodal gaps.
+        const weight=-3*Math.log1p(-opacity)/sum;
         for(let j=0;j<raySteps;j++) {
           const amount=Math.abs(values[j])*weight;if(!amount)continue;
           const i=depths[j],color=phase?(values[j]>=0?[96,234,214]:[175,138,255]):o.visualColor;

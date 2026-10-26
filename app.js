@@ -285,7 +285,7 @@ function visualOrbital(o) {
 let volumeCanvas;
 let glowPreviewUntil=0,glowNeedsRefinement=false;
 const glowMoving=()=>Boolean(state.drag||$('spin').checked||performance.now()<glowPreviewUntil);
-function moveView(){glowPreviewUntil=performance.now()+150;state.dirty=true;}
+function moveView(){glowPreviewUntil=performance.now()+60;state.dirty=true;}
 function drawGlow(w,h) {
   volumeCanvas??=document.createElement('canvas');
   const lens=state.atom&&$('core-lens').checked;
@@ -444,7 +444,7 @@ canvas.onpointermove=e=>{
   state.yaw+=(e.clientX-state.drag[0])*.008;state.pitch=Math.max(-1.55,Math.min(1.55,state.pitch+(e.clientY-state.drag[1])*.008));
   state.drag=[e.clientX,e.clientY];moveView();
 };
-canvas.onpointerup=canvas.onpointercancel=canvas.onlostpointercapture=()=>state.drag=null;
+canvas.onpointerup=canvas.onpointercancel=canvas.onlostpointercapture=()=>{state.drag=null;glowPreviewUntil=0;};
 canvas.addEventListener('wheel',e=>{e.preventDefault();state.zoom=Math.max(.4,Math.min(MAX_ZOOM,state.zoom*Math.exp(-e.deltaY*.001)));$('zoom').value=state.zoom;moveView();},{passive:false});
 new ResizeObserver(()=>state.dirty=true).observe(canvas);
 document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>choose(...b.dataset.preset.split(',').map(Number)));

@@ -300,7 +300,7 @@ run(`choose(7,1,1);$('spin').checked=false;$('core-lens').checked=false;
   canvas.onpointermove({clientX:10,clientY:5});render(performance.now());`);
 assert.ok(run('projectionCalls.every(o=>o.maxSize<=80&&o.raySteps===32)'),'dragging uses bounded preview work');
 assert.equal(run('glowNeedsRefinement'),true);
-run(`canvas.onpointerup();glowPreviewUntil=0;projectionCalls=[];render(performance.now());`);
+run(`canvas.onpointerup();projectionCalls=[];render(performance.now());`);
 assert.ok(run('projectionCalls.length>0&&projectionCalls.every(o=>o.maxSize===224&&o.raySteps===128)'),
   'stopping restores sharp high-shell detail even without another input event');
 assert.equal(run('glowNeedsRefinement'),false);

@@ -291,17 +291,15 @@ function drawGlow(w,h) {
   const lens=state.atom&&$('core-lens').checked;
   const scale=Math.min(w,h)*.36*state.zoom/(lens?Math.log1p(state.viewExtent):state.viewExtent);
   ctx.globalCompositeOperation='source-over';
-  // Paint broad outer fields first, then the compact core, without washing
-  // overlapping yellow and blue fields out to additive white.
-  const orbitals=state.groups.map(g=>visualOrbital(g.orbital)).filter(o=>o.occupancy)
-    .sort((a,b)=>M.radialDistribution(b.n,b.l).extent/b.charge-M.radialDistribution(a.n,a.l).extent/a.charge);
+  const orbitals=state.groups.map(g=>({...visualOrbital(g.orbital),visualColor:visualPalette[g.orbital.l]})).filter(o=>o.occupancy);
   const moving=glowMoving();glowNeedsRefinement=moving;
   const previewSize=Math.max(20,Math.min(80,Math.floor(Math.sqrt(6400/Math.max(1,orbitals.length)))));
-  for(const o of orbitals) {
-    const image=OrbitalVisual.projectVolume(o,{width:w,height:h,scale,yaw:state.yaw,pitch:state.pitch,
-      lens,cut:$('cut').value,slice:state.viewExtent*.065,phase:$('phase').checked,color:visualPalette[o.l],
-      maxSize:moving?previewSize:state.groups.length<=3?224:state.groups.length>16?80:144,
-      raySteps:moving?32:o.n>=4?128:64});
+  if(orbitals.length) {
+    const options={width:w,height:h,scale,yaw:state.yaw,pitch:state.pitch,
+      lens,cut:$('cut').value,slice:state.viewExtent*.065,phase:$('phase').checked,color:orbitals[0].visualColor,
+      maxSize:moving?previewSize:orbitals.length<=3?224:orbitals.length>16?80:144,
+      raySteps:moving?32:orbitals.some(o=>o.n>=4)?128:64};
+    const image=orbitals.length===1?OrbitalVisual.projectVolume(orbitals[0],options):OrbitalVisual.projectCloud(orbitals,options);
     volumeCanvas.width=image.width;volumeCanvas.height=image.height;
     const g=volumeCanvas.getContext('2d'),pixels=g.createImageData(image.width,image.height);
     pixels.data.set(image.pixels);g.putImageData(pixels,0,0);

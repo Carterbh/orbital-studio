@@ -149,13 +149,66 @@ const OrbitalVisual = (() => {
       const sum=positive+negative;if(!sum)continue;
       const density=1-Math.exp(-sum*step*grid.exposure*o.occupancy);
       // An S-curve separates dim gaps from bright bands without clipping either.
-      const opacity=density*density/(density*density+(1-density)**2),offset=(y*w+x)*4;
+      const opacity=density**3.5/(density**3.5+(1-density)**3.5),offset=(y*w+x)*4;
       const tint=phase?[96,234,214].map((c,k)=>(c*positive+[175,138,255][k]*negative)/sum):color;
       for(let k=0;k<3;k++)pixels[offset+k]=tint[k]+(255-tint[k])*opacity**4*.1;
-      pixels[offset+3]=255*opacity*.95;
+      pixels[offset+3]=255*opacity*.995;
     }
     return {width:w,height:h,left,top,screenWidth,screenHeight,pixels};
   }
-  return {amplitude,surface,volume,field,projectVolume};
+  // Integrate all fields into shared depth bins. Front density absorbs the
+  // light behind it, so drawing order cannot put the core over an outer lobe.
+  function projectCloud(orbitals,{width,height,scale,yaw,pitch,lens=false,cut='none',slice=1,phase=false,maxSize=144,raySteps=64}) {
+    const models=orbitals.filter(o=>o.occupancy>0).map(o=>{
+      const grid=volume(o),physicalExtent=grid.extent/(o.charge||1);
+      return {o,grid,physicalExtent,extent:lens?Math.log1p(physicalExtent):physicalExtent};
+    }).sort((a,b)=>a.o.n-b.o.n||a.o.l-b.o.l||a.o.m-b.o.m);
+    const extent=Math.max(1e-6,...models.map(m=>m.extent)),radius=extent*scale;
+    const left=Math.max(0,width/2-radius),top=Math.max(0,height/2-radius);
+    const screenWidth=Math.min(width,width/2+radius)-left,screenHeight=Math.min(height,height/2+radius)-top;
+    const downscale=Math.min(1,maxSize/Math.max(screenWidth,screenHeight));
+    const w=Math.max(2,Math.ceil(screenWidth*downscale)),h=Math.max(2,Math.ceil(screenHeight*downscale));
+    const pixels=new Uint8ClampedArray(w*h*4),cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+    const bins=raySteps*2,tau=new Float64Array(bins),red=new Float64Array(bins),green=new Float64Array(bins),blue=new Float64Array(bins);
+    const values=new Float64Array(raySteps),depths=new Uint16Array(raySteps);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++) {
+      const u=(left+(x+.5)*screenWidth/w-width/2)/scale,v=-(top+(y+.5)*screenHeight/h-height/2)/scale;
+      const rr=u*u+v*v;if(rr>=extent*extent)continue;
+      tau.fill(0);red.fill(0);green.fill(0);blue.fill(0);
+      for(const model of models) {
+        const {o,grid,physicalExtent,extent:localExtent}=model;
+        if(rr>=localExtent*localExtent)continue;
+        const half=Math.sqrt(localExtent*localExtent-rr),step=2*half/raySteps;
+        let sum=0;
+        for(let j=0;j<raySteps;j++) {
+          const depth=-half+(j+.5)*step,yy=v*cp+depth*sp,zz=-v*sp+depth*cp;
+          let px=u*cy-zz*sy,py=yy,pz=u*sy+zz*cy;
+          if(lens){const r=Math.sqrt(rr+depth*depth),factor=r?Math.expm1(r)/r:1;px*=factor;py*=factor;pz*=factor;}
+          const a=(cut==='half'&&pz>0)||(cut==='slice'&&Math.abs(pz)>slice)?0:field(grid,px/physicalExtent,py/physicalExtent,pz/physicalExtent);
+          values[j]=Math.sign(a)*a*a;sum+=a*a;
+          depths[j]=Math.min(bins-1,Math.max(0,Math.floor((depth/extent+1)*bins/2)));
+        }
+        if(!sum)continue;
+        const density=1-Math.exp(-sum*step/localExtent*grid.exposure*o.occupancy);
+        const opacity=.995*density**3.5/(density**3.5+(1-density)**3.5);
+        const weight=-Math.log1p(-opacity)/sum;
+        for(let j=0;j<raySteps;j++) {
+          const amount=Math.abs(values[j])*weight;if(!amount)continue;
+          const i=depths[j],color=phase?(values[j]>=0?[96,234,214]:[175,138,255]):o.visualColor;
+          tau[i]+=amount;red[i]+=amount*color[0];green[i]+=amount*color[1];blue[i]+=amount*color[2];
+        }
+      }
+      let transmission=1,r=0,g=0,b=0;
+      // Positive camera depth is nearest to the viewer.
+      for(let i=bins-1;i>=0&&transmission>.001;i--)if(tau[i]) {
+        const alpha=-Math.expm1(-tau[i]),weight=transmission*alpha/tau[i];
+        r+=red[i]*weight;g+=green[i]*weight;b+=blue[i]*weight;transmission*=1-alpha;
+      }
+      const alpha=1-transmission,offset=(y*w+x)*4;
+      if(alpha){pixels[offset]=r/alpha;pixels[offset+1]=g/alpha;pixels[offset+2]=b/alpha;pixels[offset+3]=alpha*255;}
+    }
+    return {width:w,height:h,left,top,screenWidth,screenHeight,pixels};
+  }
+  return {amplitude,surface,volume,field,projectVolume,projectCloud};
 })();
 if(typeof module!=='undefined')module.exports=OrbitalVisual;

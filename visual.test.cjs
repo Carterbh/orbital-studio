@@ -66,3 +66,18 @@ for(let i=1;i<peaks.length;i++){
 assert.ok(profile[0]<5,'the p nodal plane remains dark');
 assert.ok(separated>=3,'high-shell p fields retain at least four bright bands separated by dark valleys');
 console.log('PASS: distinct high-shell p bands with dark gaps at focused-view detail.');
+const layered=[{n:1,l:0,m:0,charge:3,occupancy:2,visualColor:[255,221,115]},
+  {n:2,l:1,m:0,charge:1,occupancy:2,visualColor:[96,181,255]}];
+const depthOptions={width:129,height:129,scale:8,yaw:0,pitch:0,maxSize:129};
+const front=V.projectCloud(layered,depthOptions),gap=V.projectCloud(layered,{...depthOptions,yaw:Math.PI/2});
+const centerColor=image=>Array.from(image.pixels.slice((Math.floor(image.height/2)*image.width+Math.floor(image.width/2))*4,
+  (Math.floor(image.height/2)*image.width+Math.floor(image.width/2))*4+4));
+assert.ok(centerColor(front)[2]>centerColor(front)[0]*1.8,'foreground p density obscures the yellow core');
+assert.ok(centerColor(gap)[0]>centerColor(gap)[2]*1.8,'core remains visible through the p nodal plane');
+assert.deepEqual(V.projectCloud([...layered].reverse(),depthOptions).pixels,front.pixels,'depth compositing is independent of orbital array order');
+assert.deepEqual(V.projectCloud([...layered,{...layered[1],occupancy:0}],depthOptions).pixels,front.pixels,'empty orbitals neither emit nor obscure');
+for(const cut of ['half','slice']){
+  const im=V.projectCloud(layered,{...depthOptions,maxSize:40,lens:true,phase:true,cut,slice:.3});
+  assert.ok(im.pixels.some((value,i)=>i%4===3&&value>0),'phase, lens, and cutaways retain a visible field');
+}
+console.log('PASS: foreground occlusion, core visible through nodal gaps, order independence, empty fields, and cutaways.');
